@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<project name="UpgradingDave Java Development">
+  <body>
+    <menu name="Main Menu">
+      <item name="Overview" href="index.html" />      
+      <item name="Summary" href="project-summary.html" />      
+      <item name="JavaDocs" href="apidocs/index.html" />
+      <item name="Junit Test JavaDocs" href="testapidocs/index.html" />
+      <item name="Dependencies" href="dependencies.html" />
+    </menu>
+  </body>
+</project>

@@ -1,0 +1,186 @@
+Prefomatic!
+   
+Usage
+
+* PrefsHelper 
+
+** Use Spring!
+
+   The easiest way to use PrefsHelper is inside a spring app. Simply include the following bean defintion passing the name of your application
+
+------------------------
+<bean id="prefs" class="com.upgradingdave.prefs.PrefsHelper"
+            factory-method="getConfig">
+    <constructor-arg name="appName" value="NAME_OF_YOUR_APP"/>
+</bean>
+------------------------
+
+   This tells PrefsHelper to first look for properties files under $OS_ENV/NAME_OF_YOUR_APP/NAME_OF_YOUR_APP.properties. If it doesn't find it there, it'll check on the classpath. 
+
+** How the PrefsHelper Works
+
+   PrefsHelper provides a standard (and hopefully easier) way to retrieve values from properties files. It first looks for a properties file outside of your application's jar or war (more details below). This allows for easily controlling the behavior of the application by changing values in an external properties file during runtime. If it doesn't find the property value inside the external properties file, it checks inside a properties file inside the classpath inside the jar and/or war. 
+
+   Reading a string value from your application properties file is as easy as: 
+
+------------------------
+String myvalue = PrefsHelper.getConfig().getString("name.of.property");
+------------------------
+
+   Under the covers, getConfig() returns an apache commons Configuration object. So, you can also get pretty much any other type of value. For example, if this is in your properties file: 
+
+------------------------
+hide_title=true
+my_name=Dave
+------------------------
+
+   Then use this to retrieve hide_title as a boolean value: 
+
+------------------------
+boolean hideTitle = PrefsHelper.getConfig().getBoolean("hide_title");
+------------------------
+
+   And use this to retieve my_name as a String: 
+   
+------------------------
+String myvalue = PrefsHelper.getConfig().getString("my_name");
+------------------------
+
+    Before you can use the getConfig() method, you must initialize the PrefsHelper and tell it the name of your application. This sets up the path that PrefsHelper looks for the external properties file. For example: 
+
+------------------------
+Configuration prefs = PrefsHelper.getConfig("myapp");
+------------------------
+   
+    First, PrefsHelper will look inside prefomatic.properties to figure out the name of the os env variable. Next it will check the os environment variable to know where to find a external properties file for the application. For example, if OS_ENV is set to `D:\Custom`, then PrefsHelper will first look for the file: `D:\Custom\myapp\myapp.properties`. 
+
+    If OS_ENV env variable doesn't exist, or if `D:\Custom\myapp\myapp.properties` directory doesn't exist, then PrefsHelper will next check for 'myapp.properties' file inside the application's classpath. If this is a webapp, it will look for `WEB-INF\classes\myapp.properties`. If this is a jar application, it will look for `classes\myapp.properties`. 
+
+   If PrefsHelper can't find a property value in either one of these places, it will throw an exception. To prevent this from happening, you can hard code default values in the code. For example: 
+
+------------------------
+String myvalue = PrefsHelper.getConfig().getString("my_name", "Dave");
+------------------------
+
+    If PrefsHelper can't find the "my_name" preference in either `D:\CustomJSPPortlets\myapp\myapp.properties` nor inside the war under `WEB-INF\classes\myapp.properties`, then it will return "Dave" as the default value. 
+
+
+** How to use the PrefsHelper in your webapp
+
+    As mentioned above, you need to initialize the PrefsHelper by passing the name of your applicaiton. PrefsHelper then uses this name along with the value of an os env variable to locate the properties files. To make it easy to initialize the PrefsHelper inside web applications, use the following startup servlet. First, add this to the WEB-INF\web.xml:     
+
+-----------------------
+<servlet>
+  <servlet-name>PropertyServlet</servlet-name>
+  <servlet-class>com.upgradingdave.servlet.InitServlet</servlet-class>
+  <init-param>
+    <param-name>app-name</param-name>
+    <param-value>NAME OF YOUR APP</param-value>
+  </init-param>
+  <load-on-startup>1</load-on-startup>
+</servlet>
+-----------------------
+
+    This calls `PrefsHelper.getConfig("NAME OF YOUR APP")` so you don't have to worry about initialization. After that, you can simply use the following anywhere in your code: 
+
+-----------------------
+Configuration prefs = PrefsHelper.getConfig()
+prefs.getString("any.property.needed", "some default value");
+-----------------------
+
+    I like to create a class that defines each key int the properties file as a java constant. That way, each property key/value pair is nicely documented by javadoc. For example, if I have this properties file: 
+
+-----------------------
+idk.username=my name
+idk.password=my password
+idk.endpoint=http://wci-wsapi:11905/ptapi/services/QueryInterfaceAPI
+-----------------------
+
+    I would create the following class: 
+
+-----------------------
+package com.myapp
+
+import com.upgradingdave.prefs.PrefsHelper;
+import org.apache.commons.configuration.Configuration;
+
+/**
+ * Control the functionality of this application by changing the values of the
+ * following preferences inside the applications properties file
+ * 
+ * @author dparoulek
+ * 
+ */
+public class MyAppPrefs {
+	protected static final Configuration prefs = PrefsHelper.getConfig();
+
+	/**
+	 * IDK PRC username
+	 */
+
+        //!!!!!!!!!!! NOTE THAT THE FOLLOWING EXAMPLE WILL CAUSE HEADACHES !!!!!!
+	// The following line prevents the ability of PrefsHelper to
+	//dynamically reload values form properties files during
+	//runtime. PrefsHelper will only retrieve the value from the
+	//properties file ONCE (when the MyAppPrefs class is
+	//instantiated).
+	public static final String IDK_USERNAME = prefs.getString("idk.username");
+
+	//So, you MUST use methods like the line below so that the
+	//PrefsHelper has the opportunity to check file timestamps to
+	//see whether they've been changes since the last time
+	public String IDK_USERNAME(){
+                  return prefs.getString("idk.username");
+              }
+
+	/**
+	 * IDK PRC password
+	 */
+	public String IDK_PASSWORD(){
+                  return prefs.getString("idk.password");
+              }
+
+	/**
+	 * IDK PRC url endpoint
+	 */
+	public String IDK_ENDPOINT(){
+                  return prefs.getString("idk.endpoint", "http://wci-wsapi:11905/ptapi/services/QueryInterfaceAPI");
+              }
+}
+-----------------------
+
+   Then, in your application code, you can easily and confidently retrieve property values like so: 
+
+-----------------------
+String username = MyAppPrefs.IDK_USERNAME();
+-----------------------
+
+Known Issues: 
+
+  * If you add a new property after the app is running, it won't be picked up by PrefsHelper (unless you force PrefsHelper to reload using PrefsHelper.config(true);
+
+Release Notes: 
+
+  * Had to remove log4j logger from PrefsHelper because PrefsHelper
+    needs a chance to initialize log4j. It's a chicken and egg problem
+    because if we use log4j to log from inside PrefsHelper, then log4j
+    gets initialized before PrefsHelper has a chance to check for any
+    external log4j config files
+
+  * Added Prefs.getConfig(appName, force_reload). This can be used to
+    switch between property files (which is handy for unit tests).
+
+  * Added JUnit test to ensure that apache-commons was monitoring
+    properties files and reloading values dynamically during
+    runtime. Test confirmed that it is working correctly. The problem
+    was that some applicaiton like ResetPassword was not calling
+    PrefsHelper correctly. I updated the documentation above with a
+    warning.
+
+  * Added PrefsHelper documentation
+
+  * Added HttpHelper for easily downloading text documents over http
+
+  * Added getExternalPropertiesFilePath. Client applications can use this to get a handle on the external properties file if needed
+
+  * Added getExternalPropertiesFolderPath. Client applications can use this to get a handle on the external properties folder path if needed
